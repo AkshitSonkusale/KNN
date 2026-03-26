@@ -10,74 +10,104 @@ from sklearn.neighbors import KNeighborsRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.tree import DecisionTreeRegressor
 
-# Title
-st.title("📊 ML Model Comparison App")
+# ---------------- UI ---------------- #
+st.set_page_config(page_title="ML Model Dashboard", layout="wide")
 
-# Upload file
-uploaded_file = st.file_uploader("Upload your dataset (CSV)", type=["csv"])
+st.title("📊 ML Model Performance Dashboard")
 
-if uploaded_file:
-    df = pd.read_csv(uploaded_file)
-    
-    st.write("### Dataset Preview")
-    st.dataframe(df.head())
+st.markdown("Compare multiple ML models on a preloaded dataset")
 
-    # Select target column
-    target = st.selectbox("Select Target Column", df.columns)
+# ---------------- LOAD DATA ---------------- #
+@st.cache_data
+def load_data():
+    df = pd.read_csv("data.csv")   # 🔥 your dataset file name
+    return df
 
-    X = df.drop(columns=[target])
-    y = df[target]
+df = load_data()
 
-    # Handle categorical (basic)
-    X = pd.get_dummies(X)
+st.subheader("Dataset Preview")
+st.dataframe(df.head())
 
-    # Scaling
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+# ---------------- SELECT TARGET ---------------- #
+target = st.selectbox("Select Target Column", df.columns)
 
-    # Split
-    X_train, X_test, y_train, y_test = train_test_split(
-        X_scaled, y, test_size=0.2, random_state=42
-    )
+# ---------------- PREPROCESSING ---------------- #
+X = df.drop(columns=[target])
+y = df[target]
 
-    # Model selection
-    model_name = st.selectbox(
-        "Choose Model",
-        ["KNN", "Linear Regression", "Decision Tree"]
-    )
+# Encode categorical
+X = pd.get_dummies(X)
 
-    # Train button
-    if st.button("Train Model"):
+# Scale
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
 
-        if model_name == "KNN":
-            k = st.slider("Select K value", 1, 20, 5)
-            model = KNeighborsRegressor(n_neighbors=k)
+# Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42
+)
 
-        elif model_name == "Linear Regression":
-            model = LinearRegression()
+# ---------------- TRAIN BUTTON ---------------- #
+if st.button("🚀 Run Models"):
 
-        else:
-            model = DecisionTreeRegressor()
+    results = []
 
-        # Train
-        model.fit(X_train, y_train)
-        y_pred = model.predict(X_test)
+    # -------- KNN -------- #
+    k_values = range(1, 21)
+    mse_values = []
 
-        # Metrics
-        mse = mean_squared_error(y_test, y_pred)
-        r2 = r2_score(y_test, y_pred)
+    for k in k_values:
+        knn = KNeighborsRegressor(n_neighbors=k)
+        knn.fit(X_train, y_train)
+        y_pred = knn.predict(X_test)
+        mse_values.append(mean_squared_error(y_test, y_pred))
 
-        # Display
-        st.success("Model Trained Successfully!")
+    best_k = k_values[np.argmin(mse_values)]
 
-        st.write("### 📈 Results")
-        st.write(f"**MSE:** {mse:.2f}")
-        st.write(f"**R² Score:** {r2:.4f}")
+    knn = KNeighborsRegressor(n_neighbors=best_k)
+    knn.fit(X_train, y_train)
+    y_pred_knn = knn.predict(X_test)
 
-        # Interpretation
-        if r2 < 0:
-            st.error("Model is performing worse than baseline ⚠️")
-        elif r2 < 0.5:
-            st.warning("Model performance is moderate")
-        else:
-            st.success("Good model performance ✅")
+    mse_knn = mean_squared_error(y_test, y_pred_knn)
+    r2_knn = r2_score(y_test, y_pred_knn)
+
+    results.append(["KNN", mse_knn, r2_knn])
+
+    # -------- Linear Regression -------- #
+    lr = LinearRegression()
+    lr.fit(X_train, y_train)
+    y_pred_lr = lr.predict(X_test)
+
+    mse_lr = mean_squared_error(y_test, y_pred_lr)
+    r2_lr = r2_score(y_test, y_pred_lr)
+
+    results.append(["Linear Regression", mse_lr, r2_lr])
+
+    # -------- Decision Tree -------- #
+    dt = DecisionTreeRegressor(random_state=42)
+    dt.fit(X_train, y_train)
+    y_pred_dt = dt.predict(X_test)
+
+    mse_dt = mean_squared_error(y_test, y_pred_dt)
+    r2_dt = r2_score(y_test, y_pred_dt)
+
+    results.append(["Decision Tree", mse_dt, r2_dt])
+
+    # ---------------- DISPLAY ---------------- #
+    st.subheader("📈 Model Comparison")
+
+    results_df = pd.DataFrame(results, columns=["Model", "MSE", "R2 Score"])
+    st.dataframe(results_df)
+
+    # ---------------- BEST MODEL ---------------- #
+    best_model = results_df.loc[results_df["R2 Score"].idxmax()]
+
+    st.success(f"🏆 Best Model: {best_model['Model']}")
+
+    # ---------------- K GRAPH ---------------- #
+    st.subheader("📉 KNN Tuning (K vs MSE)")
+    chart_data = pd.DataFrame({
+        "K": list(k_values),
+        "MSE": mse_values
+    })
+    st.line_chart(chart_data.set_index("K"))
