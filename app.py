@@ -20,7 +20,7 @@ st.markdown("Compare multiple ML models on a preloaded dataset")
 # ---------------- LOAD DATA ---------------- #
 @st.cache_data
 def load_data():
-    df = pd.read_csv("data.csv")   # 🔥 your dataset file name
+    df = pd.read_csv("task1_dataset.csv")   # 🔥 your dataset file name
     return df
 
 df = load_data()
